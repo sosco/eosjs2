@@ -34,6 +34,7 @@ export interface SignatureProvider {
 export interface CachedAbi {
   rawAbi: Uint8Array;
   abi: Abi;
+  codeHash: string;
 }
 
 export class Api {
@@ -72,11 +73,11 @@ export class Api {
       return this.cachedAbis.get(accountName);
     let cachedAbi: CachedAbi;
     try {
-      // todo: use get_raw_abi when it becomes available
-      let rawAbi = base64ToBinary((await this.rpc.get_raw_code_and_abi(accountName)).abi);
+      let rawResult = await this.rpc.get_raw_abi(accountName);
+      let rawAbi = base64ToBinary(rawResult.abi);
       const buffer = new ser.SerialBuffer({ textEncoder: this.textEncoder, textDecoder: this.textDecoder, array: rawAbi });
       let abi = this.abiTypes.get('abi_def').deserialize(buffer);
-      cachedAbi = { rawAbi, abi };
+      cachedAbi = { rawAbi, abi, codeHash: rawResult.code_hash };
     } catch (e) {
       e.message = `fetching abi for ${accountName}: ${e.message}`;
       throw e;
