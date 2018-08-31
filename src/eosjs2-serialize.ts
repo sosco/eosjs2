@@ -376,7 +376,7 @@ export class SerialBuffer {
   }
 
   /** Append a `symbol` */
-  public pushSymbol({ name, precision }) {
+  public pushSymbol({ name, precision }: {name: string, precision: number}) {
     const a = [precision & 0xff]
     a.push(...this.textEncoder.encode(name))
     while (a.length < 8) {
@@ -528,7 +528,7 @@ export function stringToSymbol(s: string): {name: string, precision: number} {
 }
 
 /** Convert `Symbol` to `string`. format: `precision,NAME`. */
-export function symbolToString({ name, precision }) {
+export function symbolToString({ name, precision }: {name: string, precision: number}) {
   return precision + "," + name
 }
 
