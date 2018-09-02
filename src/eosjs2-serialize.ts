@@ -37,7 +37,7 @@ export interface Type {
   /** Base of this type, if this is a struct */
   base: Type;
 
-  /** Contained fields, if this is a struct */
+  /** Contained fields, if this is a struct or variant */
   fields: Field[];
 
   /** Convert `data` to binary form and store in `buffer` */
@@ -555,6 +555,13 @@ function deserializeStruct(buffer: SerialBuffer) {
   return result;
 }
 
+function deserializeVariant(buffer: SerialBuffer) {
+  let index = buffer.getVaruint32();
+  if (index >= this.fields.length)
+    throw new Error(`invalid variant index ${index} in ${this.name}`);
+  return [this.fields[index].name, this.fields[index].type.deserialize(buffer)];
+}
+
 function serializeArray(buffer: SerialBuffer, data: any[]) {
   buffer.pushVaruint32(data.length);
   for (let item of data)
@@ -818,14 +825,14 @@ export function getType(types: Map<string, Type>, name: string): Type {
  * @param initialTypes Set of types to build on. In most cases, it's best to fill this from a fresh call to `getTypesFromAbi()`.
  */
 export function getTypesFromAbi(initialTypes: Map<string, Type>, abi: Abi) {
-  let types = new Map(initialTypes);
+  let result = new Map(initialTypes);
   if (abi.types)
     for (let { new_type_name, type } of abi.types)
-      types.set(new_type_name,
+      result.set(new_type_name,
         createType({ name: new_type_name, aliasOfName: type, }));
   if (abi.structs)
     for (let { name, base, fields } of abi.structs) {
-      types.set(name, createType({
+      result.set(name, createType({
         name,
         baseName: base,
         fields: fields.map(({ name, type }) => ({ name, typeName: type, type: null })),
@@ -833,13 +840,21 @@ export function getTypesFromAbi(initialTypes: Map<string, Type>, abi: Abi) {
         deserialize: deserializeStruct,
       }));
     }
-  for (let [name, type] of types) {
+  if (abi.variants)
+    for (let { name, types } of abi.variants) {
+      result.set(name, createType({
+        name,
+        fields: types.map(type => ({ name: type, typeName: type, type: null })),
+        deserialize: deserializeVariant,
+      }));
+    }
+  for (let [name, type] of result) {
     if (type.baseName)
-      type.base = getType(types, type.baseName);
+      type.base = getType(result, type.baseName);
     for (let field of type.fields)
-      field.type = getType(types, field.typeName);
+      field.type = getType(result, field.typeName);
   }
-  return types;
+  return result;
 } // getTypesFromAbi
 
 /** TAPoS: Return transaction fields which reference `refBlock` and expire `expireSeconds` after `refBlock.timestamp` */
